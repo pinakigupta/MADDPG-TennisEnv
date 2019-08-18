@@ -107,11 +107,9 @@ class Agent():
 
         # ---------------------------- update critic ---------------------------- #
         # Get predicted next-state actions and Q values from target models
-        game_next_states_per_actor = torch.split(game_next_states, self.state_size, dim=1)
-        game_next_states_per_actor = list(game_next_states_per_actor)
         next_actions = []
         for actor_idx in range(self.num_agents):
-            next_actions.append(self.actor_target(game_next_states_per_actor[actor_idx]))
+            next_actions.append(self.actor_target(torch.split(game_next_states, self.state_size, dim=1)[actor_idx]))
         game_actions_next = torch.cat(next_actions, dim=1)    
         Q_targets_next = self.critic_target(game_next_states, game_actions_next)
         # Compute Q targets for current states (y_i)
@@ -130,11 +128,9 @@ class Agent():
         # Compute actor loss
 
         
-        game_states_per_actor = torch.split(game_states, self.state_size, dim=1)
-        game_states_per_actor = list(game_states_per_actor)
         game_actions_pred = []
         for actor_idx in range(self.num_agents):
-            game_actions_pred.append(self.actor_target(game_states_per_actor[actor_idx]))
+            game_actions_pred.append(self.actor_target(torch.split(game_states, self.state_size, dim=1)[actor_idx]))
         game_actions_pred = torch.cat(game_actions_pred, dim=1)
         actor_loss = -self.critic_actual(game_states, game_actions_pred).mean()
         # Minimize the loss
