@@ -123,9 +123,9 @@ def train(env = None, n_episodes=1000, agent = None,
         while True:
             actions = agent.act(states)
             env_info = env.step(actions)[brain_name]        # send the action to the environment
-            next_states = env_info.vector_observations     # get the next states
-            rewards = env_info.rewards                     # get the reward
-            dones = env_info.local_done                  # see if episode has finished
+            next_states = env_info.vector_observations      # get the next states
+            rewards = env_info.rewards                      # get the reward
+            dones = env_info.local_done                     # see if episode has finished
             agent.step(states, actions, rewards, next_states, dones)
             states = next_states
             score += rewards
@@ -164,7 +164,7 @@ agent = maddpg_agent.Agent(state_size=state_size,
 
 ddpg_scores , ddpg_avg_scores  = train( env = env,
                                         agent = agent,
-                                        n_episodes = 6000) # Multiple parallel Env
+                                        n_episodes = 3000) # Multiple parallel Env
 
 
 # In[26]:
