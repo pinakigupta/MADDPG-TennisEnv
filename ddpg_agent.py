@@ -4,7 +4,7 @@ import copy
 import os
 from collections import namedtuple, deque
 from importlib import reload 
-from ddpg_utils import OUNoise, ReplayBuffer
+from ddpg_utils import OUNoise, Replay, transpose_to_tensor
 import model
 import torch
 import torch.nn.functional as F
@@ -62,13 +62,13 @@ class Agent():
         self.noise = OUNoise((num_agents, action_size), random_seed)
 
         # Replay memory
-        self.memory = ReplayBuffer(DEVICE, action_size, BUFFER_SIZE, BATCH_SIZE, random_seed)
+        self.memory = Replay(action_size, BUFFER_SIZE, BATCH_SIZE)
     
     def step(self, state, action, reward, next_state, done):
         """Save experience in replay memory, and use random sample from buffer to learn."""
         # Save experience / reward
         for i in range(self.num_agents):
-            self.memory.add(state[i,:], action[i,:], reward[i], next_state[i,:], done[i])
+            self.memory.add((state[i,:], action[i,:], reward[i], next_state[i,:], done[i]))
 
         # Learn, if enough samples are available in memory
         if len(self.memory) > BATCH_SIZE:
@@ -101,7 +101,9 @@ class Agent():
             experiences (Tuple[torch.Tensor]): tuple of (s, a, r, s', done) tuples 
             gamma (float): discount factor
         """
-        states, actions, rewards, next_states, dones = experiences
+        states, actions, rewards, next_states, dones = transpose_to_tensor(experiences)
+        rewards = rewards.unsqueeze(1)
+        dones = dones.unsqueeze(1)
 
         # ---------------------------- update critic ---------------------------- #
         # Get predicted next-state actions and Q values from target models

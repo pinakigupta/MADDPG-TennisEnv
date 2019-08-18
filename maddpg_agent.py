@@ -4,7 +4,7 @@ import copy
 import os
 from collections import namedtuple, deque
 from importlib import reload 
-from ddpg_utils import OUNoise, ReplayBuffer
+from ddpg_utils import OUNoise, Replay, transpose_to_tensor
 import model
 import torch
 import torch.nn.functional as F
@@ -18,7 +18,7 @@ GAMMA = 0.99            # discount factor
 TAU = 1e-3              # for soft update of target parameters
 LR_ACTOR = 1e-4         # learning rate of the actor 
 LR_CRITIC = 1e-4        # learning rate of the critic
-WEIGHT_DECAY = 0   	# L2 weight decay
+WEIGHT_DECAY = 0   	    # L2 weight decay
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("DEVICE is ", DEVICE)
@@ -62,7 +62,7 @@ class Agent():
         self.noise = OUNoise((num_agents, action_size), random_seed)
 
         # Replay memory
-        self.memory = ReplayBuffer(DEVICE, action_size, BUFFER_SIZE, BATCH_SIZE, random_seed)
+        self.memory = Replay(action_size, BUFFER_SIZE, BATCH_SIZE)
     
     def step(self, states, actions, rewards, next_states, dones):
         """Save experience in replay memory, and use random sample from buffer to learn."""
@@ -70,7 +70,7 @@ class Agent():
         game_state = states.flatten()
         game_next_state = next_states.flatten()
         game_action = actions.flatten()    
-        self.memory.add(game_state, game_action, rewards, game_next_state, dones)
+        self.memory.add((game_state, game_action, rewards, game_next_state, dones))
 
         # Learn, if enough samples are available in memory
         if len(self.memory) > BATCH_SIZE:
@@ -103,7 +103,7 @@ class Agent():
             experiences (Tuple[torch.Tensor]): tuple of (s, a, r, s', done) tuples 
             gamma (float): discount factor
         """
-        game_states, game_actions, rewards, game_next_states, dones = experiences
+        game_states, game_actions, rewards, game_next_states, dones = transpose_to_tensor(experiences)
 
         # ---------------------------- update critic ---------------------------- #
         # Get predicted next-state actions and Q values from target models
