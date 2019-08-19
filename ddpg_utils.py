@@ -52,3 +52,34 @@ def transpose_to_tensor(tuples):
         return torch.tensor(x, dtype=torch.float).to(DEVICE)
 
     return list(map(to_tensor, zip(*tuples)))
+
+
+class Config:
+    def __init__(self, seed):
+        random.seed(seed)
+        torch.manual_seed(seed)
+        self.seed = seed
+
+        self.env = None
+        self.brain_name = None
+        self.num_agents = None
+        self.state_size = None
+        self.action_size = None
+
+        self.actor_fn = None
+        self.actor_opt_fn = None
+        self.critic_fn = None
+        self.critic_opt_fn = None
+        self.replay_fn = None
+        self.noise_fn = None
+
+        self.discount = None
+        self.target_mix = None
+
+        self.max_episodes = None
+        self.max_steps = None
+
+        self.actor_path = None
+        self.critic_path = None
+        self.scores_path = None
+
