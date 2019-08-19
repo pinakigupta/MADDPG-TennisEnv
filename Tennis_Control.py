@@ -111,15 +111,14 @@ def plot_scores(scores,avg_scores = None):
 # In[18]:
 
 
-def train(env = None, n_episodes=1000, agent = None, 
-         checkpoint_score = 0.5, checkpt_folder = ""):
+def train(env = None, agent = None, config = None):
     
     
     scores_deque = deque(maxlen=100)
     scores = []
     goal_steps = []
     mean_scores_window = []
-    for i_episode in range(1, n_episodes+1):
+    for i_episode in range(1, config.max_episodes+1):
         env_info = env.reset(train_mode=True)[brain_name] # reset the environment
         states = env_info.vector_observations            # get the current state
         #agent.reset()
@@ -145,7 +144,7 @@ def train(env = None, n_episodes=1000, agent = None,
               format(i_episode, np.mean(scores_deque), scores[-1]), end="")
 
 
-        if np.mean(scores_deque)>=checkpoint_score:
+        if np.mean(scores_deque)>=config.goal_score:
             checkpt = "Episode" + str(i_episode)
             print('\nEnvironment solved in {:d} episodes!\tAverage Score: {:.2f}'.format(i_episode, np.mean(scores_deque)))
             agent.checkpoint(checkpt)
@@ -174,22 +173,21 @@ config.noise_fn = lambda: OUNoise(config.action_size, mu=0., theta=0.15, sigma=0
 config.discount = 0.99
 config.target_mix = 3e-3
 
-config.max_episodes = 2000
+config.max_episodes = 3000
 config.max_steps = int(1e6)
 config.goal_score = 1
 
 config.CHECKPOINT_FOLDER = "MultiAgentCheckPt"
 
-
-agent = maddpg_agent.Agent(config=config)
+maddpg_agent = maddpg_agent.Agent(config=config)
 
 
 # In[21]:
 
 
 ddpg_scores , ddpg_avg_scores  = train( env = env,
-                                        agent = agent,
-                                        n_episodes = 3000) # Multiple parallel Env
+                                        agent = maddpg_agent,
+                                        config = config) # Multiple parallel Env
 
 
 # In[26]:
