@@ -25,7 +25,7 @@ DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 class Agent:
     """Interacts with and learns from the environment."""
     
-    def __init__(self, state_size, action_size, random_seed , num_agents = 1, checkpt_folder = "checkpt" ):
+    def __init__(self, state_size, action_size, random_seed , num_agents = 1, checkpt_folder = "checkpt" , config = None):
         """Initialize an Agent object.
         
         Params
@@ -34,6 +34,10 @@ class Agent:
             action_size (int): dimension of each action
             random_seed (int): random seed
         """
+
+        self.config = config
+
+        
         self.state_size = state_size
         self.num_agents = num_agents
         self.action_size = action_size
@@ -113,14 +117,14 @@ class Agent:
         game_actions_next = [self.actor_target(torch.split(game_next_states, self.state_size, dim=1)[i]) for i in range(self.num_agents)]
 
         game_actions_next = torch.cat(game_actions_next, dim=1)    
-        Q_targets_next = self.critic_target(game_next_states, game_actions_next)
+        Q_targets_next = self.critic_target(game_next_states.to(DEVICE), game_actions_next.to(DEVICE))
         # Compute Q targets for current states (y_i)
         game_rewards = rewards.sum(1, keepdim=True)
         game_done = dones.max(1, keepdim=True)[0]
         Q_targets = game_rewards + (gamma * Q_targets_next * (1 - game_done ))
         # Compute critic loss
-        Q_expected = self.critic_actual(game_states, game_actions)
-        critic_loss = F.mse_loss(Q_expected, Q_targets)
+        Q_expected = self.critic_actual(game_states, game_actions).to(DEVICE)
+        critic_loss = F.mse_loss(Q_expected, Q_targets.detach())
         # Minimize the loss
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
@@ -132,7 +136,7 @@ class Agent:
 
         game_actions_pred = [self.actor_target(torch.split(game_states, self.state_size, dim=1)[i]) for i in range(self.num_agents)]
         game_actions_pred = torch.cat(game_actions_pred, dim=1)
-        actor_loss = -self.critic_actual(game_states, game_actions_pred).mean()
+        actor_loss = -self.critic_actual(game_states.to(DEVICE), game_actions_pred.to(DEVICE)).mean()
         # Minimize the loss
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
