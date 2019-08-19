@@ -83,8 +83,6 @@ reload(maddpg_agent)
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
-DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print("DEVICE is ", DEVICE)
 from ddpg_utils import OUNoise, Replay, transpose_to_tensor, Config
 import model
 reload(model)

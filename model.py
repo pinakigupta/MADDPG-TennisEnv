@@ -57,27 +57,4 @@ class Critic(nn.Module):
         return self.fc3(x)
 
 
-class CentralCritic(nn.Module):
-    """Critic (Value) Model."""
 
-    def __init__(self, state_size, action_size, seed, num_of_agents, fc1_units=128, fc2_units=128): 
-        super(CentralCritic, self).__init__()
-        self.fc1 = nn.Linear(state_size*num_of_agents, fc1_units)
-        self.bn1 = nn.BatchNorm1d(fc1_units)
-        self.fc2 = nn.Linear(fc1_units + action_size*num_of_agents, fc2_units)
-        self.fc3 = nn.Linear(fc2_units, 1)
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        self.fc1.weight.data.uniform_(*hidden_init(self.fc1))
-        self.fc2.weight.data.uniform_(*hidden_init(self.fc2))
-        self.fc3.weight.data.uniform_(-3e-3, 3e-3)
-
-    def forward(self, state, action):
-        if state.dim() == 1:
-            state = torch.unsqueeze(state, 0)
-
-        x = self.bn1(F.relu(self.fc1(state)))
-        x = F.relu(self.fc2(torch.cat((x, action), dim=1)))
-        return self.fc3(x)
- 
