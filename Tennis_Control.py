@@ -122,7 +122,7 @@ def train(env = None, n_episodes=1000, agent = None,
     for i_episode in range(1, n_episodes+1):
         env_info = env.reset(train_mode=True)[brain_name] # reset the environment
         states = env_info.vector_observations            # get the current state
-        agent.reset()
+        #agent.reset()
         score = np.zeros(num_envs)
         while True:
             actions = agent.act(states)
