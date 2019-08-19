@@ -12,18 +12,17 @@ import torch.optim as optim
 
 reload(model)
 
-BUFFER_SIZE = int(1e5)  # replay buffer size
-BATCH_SIZE = 128        # minibatch size
+BUFFER_SIZE = int(1e6)  # replay buffer size
+BATCH_SIZE = 3        # minibatch size
 GAMMA = 0.99            # discount factor
-TAU = 1e-3              # for soft update of target parameters
-LR_ACTOR = 1e-4         # learning rate of the actor 
-LR_CRITIC = 1e-4        # learning rate of the critic
+TAU = 3e-3              # for soft update of target parameters
+LR_ACTOR = 1e-3         # learning rate of the actor 
+LR_CRITIC = 2e-3        # learning rate of the critic
 WEIGHT_DECAY = 0   	    # L2 weight decay
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print("DEVICE is ", DEVICE)
 
-class Agent():
+class Agent:
     """Interacts with and learns from the environment."""
     
     def __init__(self, state_size, action_size, random_seed , num_agents = 1, checkpt_folder = "checkpt" ):
@@ -42,13 +41,13 @@ class Agent():
         self.CHECKPOINT_FOLDER = checkpt_folder
 
         # Actor Network (w/ Target Network)
-        self.actor_actual = model.Actor(state_size, action_size, random_seed).to(DEVICE)
-        self.actor_target = model.Actor(state_size, action_size, random_seed).to(DEVICE)
+        self.actor_actual = model.Actor(state_size, action_size, 128, 128).to(DEVICE)
+        self.actor_target = model.Actor(state_size, action_size, 128, 128 ).to(DEVICE)
         self.actor_optimizer = optim.Adam(self.actor_actual.parameters(), lr=LR_ACTOR)
 
         # Critic Network (w/ Target Network)
-        self.critic_actual = model.CentralCritic(state_size, action_size, random_seed, num_agents).to(DEVICE)
-        self.critic_target = model.CentralCritic(state_size, action_size, random_seed, num_agents).to(DEVICE)
+        self.critic_actual = model.Critic(state_size, action_size, num_agents, 128, 128).to(DEVICE)
+        self.critic_target = model.Critic(state_size, action_size, num_agents, 128, 128).to(DEVICE)
         self.critic_optimizer = optim.Adam(self.critic_actual.parameters(), lr=LR_CRITIC, weight_decay=WEIGHT_DECAY)
 
         '''if os.path.isfile(self.CHECKPOINT_FOLDER + 'checkpoint_actor.pth') and os.path.isfile(self.CHECKPOINT_FOLDER + 'checkpoint_critic.pth'):
@@ -63,6 +62,9 @@ class Agent():
 
         # Replay memory
         self.memory = Replay(action_size, BUFFER_SIZE, BATCH_SIZE)
+
+        Agent.hard_update(self.actor_target, self.actor_actual)
+        Agent.hard_update(self.critic_target, self.critic_actual)
     
     def step(self, states, actions, rewards, next_states, dones):
         """Save experience in replay memory, and use random sample from buffer to learn."""
@@ -108,8 +110,7 @@ class Agent():
         # ---------------------------- update critic ---------------------------- #
         # Get predicted next-state actions and Q values from target models
 
-        with torch.no_grad():
-            game_actions_next = [self.actor_target(torch.split(game_next_states, self.state_size, dim=1)[i]) for i in range(self.num_agents)]
+        game_actions_next = [self.actor_target(torch.split(game_next_states, self.state_size, dim=1)[i]) for i in range(self.num_agents)]
 
         game_actions_next = torch.cat(game_actions_next, dim=1)    
         Q_targets_next = self.critic_target(game_next_states, game_actions_next)
@@ -129,8 +130,7 @@ class Agent():
         # Compute actor loss
 
 
-        with torch.no_grad():
-            game_actions_pred = [self.actor_target(torch.split(game_states, self.state_size, dim=1)[i]) for i in range(self.num_agents)]
+        game_actions_pred = [self.actor_target(torch.split(game_states, self.state_size, dim=1)[i]) for i in range(self.num_agents)]
         game_actions_pred = torch.cat(game_actions_pred, dim=1)
         actor_loss = -self.critic_actual(game_states, game_actions_pred).mean()
         # Minimize the loss
@@ -139,21 +139,18 @@ class Agent():
         self.actor_optimizer.step()
 
         # ----------------------- update target networks ----------------------- #
-        self.soft_update(self.critic_actual, self.critic_target, TAU)
-        self.soft_update(self.actor_actual, self.actor_target, TAU)                     
+        Agent.soft_update(self.critic_target, self.critic_actual, TAU)
+        Agent.soft_update(self.actor_target, self.actor_actual, TAU)                     
 
-    def soft_update(self, local_model, target_model, tau):
-        """Soft update model parameters.
-        θ_target = τ*θ_local + (1 - τ)*θ_target
+    @staticmethod
+    def hard_update(target_model, source_model):
+        for target_param, param in zip(target_model.parameters(), source_model.parameters()):
+            target_param.data.copy_(param.data)
 
-        Params
-        ======
-            local_model: PyTorch model (weights will be copied from)
-            target_model: PyTorch model (weights will be copied to)
-            tau (float): interpolation parameter 
-        """
-        for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
-            target_param.data.copy_(tau*local_param.data + (1.0-tau)*target_param.data)
+    @staticmethod
+    def soft_update(target_model, source_model, mix):
+        for target_param, online_param in zip(target_model.parameters(), source_model.parameters()):
+            target_param.data.copy_(target_param.data * (1.0 - mix) + online_param.data * mix)
 
     def checkpoint(self,string):
         if not (os.path.isdir(self.CHECKPOINT_FOLDER)):

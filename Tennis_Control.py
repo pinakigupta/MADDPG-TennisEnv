@@ -132,6 +132,7 @@ def train(env = None, n_episodes=1000, agent = None,
             if np.any(dones):
                 break
 
+        score = score.max()
         scores_deque.append(np.mean(score))
         scores.append(np.mean(score))
         mean_scores_window.append(np.mean(scores_deque))
