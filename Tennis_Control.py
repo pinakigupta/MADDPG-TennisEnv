@@ -164,7 +164,7 @@ config.action_size = action_size
 config.actor_fn = lambda: model.Actor(config.state_size, config.action_size, 128, 128)
 config.actor_opt_fn = lambda params: optim.Adam(params, lr=1e-3)
 
-config.critic_fn = lambda: model.Critic(config.state_size, config.action_size , config.num_agents, 128, 128)
+config.critic_fn = lambda: model.Critic(config.state_size, config.action_size , 1, 128, 128)
 config.critic_opt_fn = lambda params: optim.Adam(params, lr=2e-3)
 
 config.replay_fn = lambda: Replay(config.action_size, buffer_size=int(1e6), batch_size=128)
@@ -179,7 +179,7 @@ config.goal_score = 1
 
 config.CHECKPOINT_FOLDER = "MultiAgentCheckPt"
 
-maddpg_agent = maddpg_agent.Agent(config=config)
+maddpg_agent = ddpg_agent.Agent(config=config)
 
 
 # In[21]:

@@ -121,10 +121,10 @@ class Agent:
             target_param.data.copy_(target_param.data * (1.0 - mix) + online_param.data * mix)
 
     def checkpoint(self,string):
-        if not (os.path.isdir(self.CHECKPOINT_FOLDER)):
-               os.makedirs(self.CHECKPOINT_FOLDER)
-        torch.save(self.actor_actual.state_dict(), self.CHECKPOINT_FOLDER + '/'+string+'_actor.pth')      
-        torch.save(self.critic_actual.state_dict(), self.CHECKPOINT_FOLDER + '/'+string+'_critic.pth')  
+        if not (os.path.isdir(self.config.CHECKPOINT_FOLDER)):
+               os.makedirs(self.config.CHECKPOINT_FOLDER)
+        torch.save(self.actor_actual.state_dict(), self.config.CHECKPOINT_FOLDER + '/'+string+'_actor.pth')      
+        torch.save(self.critic_actual.state_dict(), self.config.CHECKPOINT_FOLDER + '/'+string+'_critic.pth')  
     
 
 

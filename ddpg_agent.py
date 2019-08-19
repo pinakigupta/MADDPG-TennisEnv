@@ -1,95 +1,56 @@
-import numpy as np
-import random
 import copy
 import os
-from collections import namedtuple, deque
-from importlib import reload 
-from ddpg_utils import OUNoise, Replay, transpose_to_tensor
-import model
+import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
-
-reload(model)
-
-BUFFER_SIZE = int(1e5)  # replay buffer size
-BATCH_SIZE = 128        # minibatch size
-GAMMA = 0.99            # discount factor
-TAU = 1e-3              # for soft update of target parameters
-LR_ACTOR = 1e-4         # learning rate of the actor 
-LR_CRITIC = 1e-4        # learning rate of the critic
-WEIGHT_DECAY = 0   	# L2 weight decay
+from ddpg_utils import OUNoise, Replay, transpose_to_tensor
+from importlib import reload 
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print("DEVICE is ", DEVICE)
 
-class Agent():
-    """Interacts with and learns from the environment."""
+
+
+class Agent:
     
-    def __init__(self, state_size, action_size, random_seed , num_agents = 1, checkpt_folder = "checkpt" ):
-        """Initialize an Agent object.
-        
-        Params
-        ======
-            state_size (int): dimension of each state
-            action_size (int): dimension of each action
-            random_seed (int): random seed
-        """
-        self.state_size = state_size
-        self.num_agents = num_agents
-        self.action_size = action_size
-        self.seed = random.seed(random_seed)
-        self.CHECKPOINT_FOLDER = checkpt_folder
+    def __init__(self, config):
+        self.config = config
 
-        # Actor Network (w/ Target Network)
-        self.actor_local = model.Actor(state_size, action_size, random_seed).to(DEVICE)
-        self.actor_target = model.Actor(state_size, action_size, random_seed).to(DEVICE)
-        self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=LR_ACTOR)
+        self.actor_actual = config.actor_fn().to(DEVICE)
+        self.actor_target = config.actor_fn().to(DEVICE)
+        self.actor_optimizer = config.actor_opt_fn(self.actor_actual.parameters())
 
-        # Critic Network (w/ Target Network)
-        self.critic_local = model.Critic(state_size, action_size, random_seed).to(DEVICE)
-        self.critic_target = model.Critic(state_size, action_size, random_seed).to(DEVICE)
-        self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=LR_CRITIC, weight_decay=WEIGHT_DECAY)
+        self.critic_actual = config.critic_fn().to(DEVICE)
+        self.critic_target = config.critic_fn().to(DEVICE)
+        self.critic_optimizer = config.critic_opt_fn(self.critic_actual.parameters())
 
-        '''if os.path.isfile(self.CHECKPOINT_FOLDER + 'checkpoint_actor.pth') and os.path.isfile(self.CHECKPOINT_FOLDER + 'checkpoint_critic.pth'):
-            self.actor_local.load_state_dict(torch.load(self.CHECKPOINT_FOLDER + 'checkpoint_actor.pth'))
-            self.actor_target.load_state_dict(torch.load(self.CHECKPOINT_FOLDER + 'checkpoint_actor.pth'))
+        self.noises = [config.noise_fn() for _ in range(config.num_agents)]
+        self.replay = config.replay_fn()
 
-            self.critic_local.load_state_dict(torch.load(self.CHECKPOINT_FOLDER + 'checkpoint_critic.pth'))
-            self.critic_target.load_state_dict(torch.load(self.CHECKPOINT_FOLDER + 'checkpoint_critic.pth'))'''
+        Agent.hard_update(self.actor_target, self.actor_actual)
+        Agent.hard_update(self.critic_target, self.critic_actual)
 
-        # Noise process
-        self.noise = OUNoise((num_agents, action_size), random_seed)
+    def act(self, states, add_noise=True):
+        state = torch.from_numpy(states).float().to(DEVICE)
+        self.actor_actual.eval()
 
-        # Replay memory
-        self.memory = Replay(action_size, BUFFER_SIZE, BATCH_SIZE)
-    
-    def step(self, state, action, reward, next_state, done):
-        """Save experience in replay memory, and use random sample from buffer to learn."""
-        # Save experience / reward
-        for i in range(self.num_agents):
-            self.memory.add((state[i,:], action[i,:], reward[i], next_state[i,:], done[i]))
-
-        # Learn, if enough samples are available in memory
-        if len(self.memory) > BATCH_SIZE:
-            experiences = self.memory.sample()
-            self.learn(experiences, GAMMA)
-
-    def act(self, state, add_noise=True):
-        """Returns actions for given state as per current policy."""
-        state = torch.from_numpy(state).float().to(DEVICE)
-        self.actor_local.eval()
         with torch.no_grad():
-            action = self.actor_local(state).cpu().data.numpy()
-        self.actor_local.train()
+            action = self.actor_actual(state).cpu().numpy()
+
+        self.actor_actual.train()
         if add_noise:
-            action += self.noise.sample()
+            action += [n.sample() for n in self.noises]
         return np.clip(action, -1, 1)
 
-    def reset(self):
-        self.noise.reset()
+    def step(self, states, actions, rewards, next_states, dones):
+        for i in range(self.config.num_agents):
+            self.replay.add((states[i,:], actions[i,:], rewards[i], next_states[i,:], dones[i]))
 
-    def learn(self, experiences, gamma):
+        if len(self.replay) > self.replay.batch_size:
+            self.learn()
+
+    def learn(self):
+
         """Update policy and value parameters using given batch of experience tuples.
         Q_targets = r + γ * critic_target(next_state, actor_target(next_state))
         where:
@@ -101,58 +62,65 @@ class Agent():
             experiences (Tuple[torch.Tensor]): tuple of (s, a, r, s', done) tuples 
             gamma (float): discount factor
         """
-        states, actions, rewards, next_states, dones = transpose_to_tensor(experiences)
+
+        # Sample a batch of transitions from the replay buffer
+        transitions = self.replay.sample()
+        states, actions, rewards, next_states, dones = transpose_to_tensor(transitions)
         rewards = rewards.unsqueeze(1)
         dones = dones.unsqueeze(1)
 
-        # ---------------------------- update critic ---------------------------- #
-        # Get predicted next-state actions and Q values from target models
+        # Update online critic model
+        # Compute actions for next states with the target actor model
+        
         actions_next = self.actor_target(next_states)
-        Q_targets_next = self.critic_target(next_states, actions_next)
-        # Compute Q targets for current states (y_i)
-        Q_targets = rewards + (gamma * Q_targets_next * (1 - dones))
-        # Compute critic loss
-        Q_expected = self.critic_local(states, actions)
-        critic_loss = F.mse_loss(Q_expected, Q_targets)
-        # Minimize the loss
+
+        # Compute Q values for the next states and next actions with the target critic model
+        Q_targets_next = self.critic_target(next_states.to(DEVICE), actions_next.to(DEVICE))
+
+        # Compute Q values for the current states and actions with the Bellman equation
+        Q_targets = rewards + self.config.discount * Q_targets_next * (1 -dones)
+
+        # Compute Q values for the current states and actions with the online critic model
+        #actions = actions.view(actions.shape[0], -1)
+        Q_expected = self.critic_actual(states.to(DEVICE), actions.to(DEVICE))
+
+        # Compute and minimize the online critic loss
+        critic_loss = F.mse_loss(Q_expected, Q_targets.detach())
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.critic_actual.parameters(), 1)
         self.critic_optimizer.step()
 
-        # ---------------------------- update actor ---------------------------- #
-        # Compute actor loss
-        actions_pred = self.actor_local(states)
-        actor_loss = -self.critic_local(states, actions_pred).mean()
-        # Minimize the loss
+        # Update online actor model
+        # Compute actions for the current states with the online actor model
+        actions_pred = self.actor_actual(states)
+        # Compute the online actor loss with the online critic model
+        actor_loss = -self.critic_actual(states.to(DEVICE), actions_pred.to(DEVICE)).mean()
+        # Minimize the online critic loss
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
 
-        # ----------------------- update target networks ----------------------- #
+        # Update target critic and actor models
+        Agent.soft_update(self.actor_target, self.actor_actual, self.config.target_mix)
+        Agent.soft_update(self.critic_target, self.critic_actual, self.config.target_mix)
 
+    @staticmethod
+    def hard_update(target_model, source_model):
+        for target_param, param in zip(target_model.parameters(), source_model.parameters()):
+            target_param.data.copy_(param.data)
 
-
-
-        self.soft_update(self.critic_local, self.critic_target, TAU)
-        self.soft_update(self.actor_local, self.actor_target, TAU)                     
-
-    def soft_update(self, local_model, target_model, tau):
-        """Soft update model parameters.
-        θ_target = τ*θ_local + (1 - τ)*θ_target
-
-        Params
-        ======
-            local_model: PyTorch model (weights will be copied from)
-            target_model: PyTorch model (weights will be copied to)
-            tau (float): interpolation parameter 
-        """
-        for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
-            target_param.data.copy_(tau*local_param.data + (1.0-tau)*target_param.data)
+    @staticmethod
+    def soft_update(target_model, source_model, mix):
+        for target_param, online_param in zip(target_model.parameters(), source_model.parameters()):
+            target_param.data.copy_(target_param.data * (1.0 - mix) + online_param.data * mix)
 
     def checkpoint(self,string):
-        if not (os.path.isdir(self.CHECKPOINT_FOLDER)):
-               os.makedirs(self.CHECKPOINT_FOLDER)
-        torch.save(self.actor_local.state_dict(), self.CHECKPOINT_FOLDER + '/'+string+'_actor.pth')      
-        torch.save(self.critic_local.state_dict(), self.CHECKPOINT_FOLDER + '/'+string+'_critic.pth')  
+        if not (os.path.isdir(self.config.CHECKPOINT_FOLDER)):
+               os.makedirs(self.config.CHECKPOINT_FOLDER)
+        torch.save(self.actor_actual.state_dict(), self.config.CHECKPOINT_FOLDER + '/'+string+'_actor.pth')      
+        torch.save(self.critic_actual.state_dict(), self.config.CHECKPOINT_FOLDER + '/'+string+'_critic.pth')  
+    
+
 
 
