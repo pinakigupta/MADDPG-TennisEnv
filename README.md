@@ -71,25 +71,27 @@ The environment is considered solved, when the average (over 100 episodes) of th
 
 ### Important hyperparameters:
 1. Continuous_Control.ipynb - Main Module contains most of the hyper parameters for training the DDPG agent 
-  - n_episodes Size: 1500     # Maximum number of episodes for which training will proceed
-  - checkpoint_score: 1     # if the score is greater than this threshold, network is checkpointed and training is finished. 
+  - max_episodes Size: 1500     # Maximum number of episodes for which training will proceed
+  - checkpoint_score: 1     # if the score is greater than this threshold, network is checkpointed. 
+  - goal_score: 5     # if the score is greater than this threshold, network is checkpointed and training is finished. 
 
 
 
-2. ddpg_agent.py - contains most of the agent parameters
+
+2. maddpg/ddpg_agent.py - contains most of the agent parameters
   - Learning Rate: 1e-3/2e-3 ( DNN actor/critic) # learning rate 
   - Batch Size: 128     # minibatch size
   - Replay Buffer: 1e6  # replay buffer size
   - Gamma: 0.99         # discount factor
   - Tau: 3e-3           # for soft update of target parameters
-  - Ornstein-Uhlenbeck noise parameters (0.15 theta and 0.2 sigma.) # Noise use to introduce entropy in the system to explore more
+  - Ornstein-Uhlenbeck noise parameters (0.15 theta and 0.1 sigma.) # Noise use to introduce entropy in the system to explore more
 
 3. model.py contains the NN architecture and associated parameters
 - For the neural models:    
   - Actor    
-    - Hidden: (input, 256)  - ReLU
+    - Hidden: (input, 128)  - ReLU
     - Hidden                - BatchNorm
-    - Hidden: (256, 128)    - ReLU
+    - Hidden: (128, 128)    - ReLU
     - Hidden                - BatchNorm
     - Output: (128, 4)      - TanH
 
